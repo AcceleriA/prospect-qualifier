@@ -42,7 +42,10 @@ export default function StepLinkedinInput({
 
       try {
         const pdfjs = await import("pdfjs-dist");
-        pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+
+        // Use the worker from the npm package via CDN with a known-good version
+        // pdfjs-dist 5.6.x is not yet on cdnjs, so we use unpkg which mirrors npm exactly
+        pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjs.getDocument({
