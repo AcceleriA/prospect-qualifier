@@ -12,17 +12,14 @@ export async function scrapeLinkedInProfile(linkedinUrl: string) {
 
   const run = await client
     .actor("dev_fusion/Linkedin-Profile-Scraper")
-    .call({ urls: [linkedinUrl] });
+    .call({ profileUrls: [linkedinUrl] });
 
   const { items } = await client.dataset(run.defaultDatasetId).listItems();
   if (!items.length) throw new Error("Aucun profil trouve");
 
   const p = items[0] as Record<string, unknown>;
 
-  // Robust field mapping — different scrapers use different field names
-  const str = (
-    ...keys: string[]
-  ): string => {
+  const str = (...keys: string[]): string => {
     for (const k of keys) {
       const v = p[k];
       if (typeof v === "string" && v.trim()) return v.trim();
@@ -32,13 +29,13 @@ export async function scrapeLinkedInProfile(linkedinUrl: string) {
 
   return {
     name:
-      str("fullName", "full_name", "name") ||
-      `${str("firstName", "first_name")} ${str("lastName", "last_name")}`.trim() ||
+      str("fullName", "full_name") ||
+      `${str("firstName")} ${str("lastName")}`.trim() ||
       "Inconnu",
-    title: str("headline", "title", "position"),
-    company: str("company", "companyName", "company_name", "currentCompany"),
-    location: str("location", "addressLocality", "geo"),
-    about: str("summary", "about", "description"),
+    title: str("headline", "jobTitle", "title"),
+    company: str("companyName", "company"),
+    location: str("addressWithCountry", "addressCountryOnly", "location", "jobLocation"),
+    about: str("about", "summary", "description"),
     experience: extractExperience(p),
     skills: extractSkills(p),
     recentActivity: [] as Array<{
@@ -58,23 +55,27 @@ function extractExperience(
   duration: string;
   description: string;
 }> {
-  const raw = (p.experience || p.experiences || p.positions || []) as Array<
+  const raw = (p.experiences || p.experience || p.positions || []) as Array<
     Record<string, unknown>
   >;
   if (!Array.isArray(raw)) return [];
 
   return raw.slice(0, 10).map((exp) => ({
-    title: String(exp.title || exp.position || ""),
-    company: String(exp.companyName || exp.company || exp.company_name || ""),
+    title: String(exp.title || exp.position || exp.jobTitle || ""),
+    company: String(exp.companyName || exp.company || ""),
     duration: String(exp.duration || exp.timePeriod || exp.dateRange || ""),
     description: String(exp.description || ""),
   }));
 }
 
 function extractSkills(p: Record<string, unknown>): string[] {
-  const raw = (p.skills || p.skill || []) as Array<
-    string | Record<string, unknown>
-  >;
+  // dev_fusion uses topSkillsByEndorsements (string) or skills (array)
+  const topSkills = p.topSkillsByEndorsements;
+  if (typeof topSkills === "string" && topSkills.trim()) {
+    return topSkills.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+
+  const raw = (p.skills || p.skill || []) as Array<string | Record<string, unknown>>;
   if (!Array.isArray(raw)) return [];
 
   return raw

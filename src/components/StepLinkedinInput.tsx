@@ -42,10 +42,15 @@ export default function StepLinkedinInput({
 
       try {
         const pdfjs = await import("pdfjs-dist");
-        pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+        pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
 
         const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+        const pdf = await pdfjs.getDocument({
+          data: new Uint8Array(arrayBuffer),
+          useWorkerFetch: false,
+          isEvalSupported: false,
+          useSystemFonts: true,
+        }).promise;
 
         let text = "";
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -64,8 +69,9 @@ export default function StepLinkedinInput({
 
         setPdfText(text);
         onSubmitText(text);
-      } catch {
-        setError("Erreur lors de l'extraction du PDF.");
+      } catch (err) {
+        console.error("PDF extraction error:", err);
+        setError("Erreur lors de l'extraction du PDF. Verifie que le fichier est un vrai PDF.");
       } finally {
         setExtracting(false);
       }

@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+
+export const maxDuration = 120;
 import { SCORING_SYSTEM_PROMPT, MESSAGE_SYSTEM_PROMPT } from "@/lib/scoring";
 import { scrapeLinkedInProfile } from "@/lib/apify";
 import { isValidLinkedInUrl, isValidProfileContent } from "@/lib/validation";
