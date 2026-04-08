@@ -10,38 +10,37 @@ function getApifyClient() {
 export async function scrapeLinkedInProfile(linkedinUrl: string) {
   const client = getApifyClient();
 
-  const run = await client.actor("apify/linkedin-profile-scraper").call({
-    startUrls: [{ url: linkedinUrl }],
-    proxy: { useApifyProxy: true, apifyProxyGroups: ["RESIDENTIAL"] },
-  });
+  const run = await client
+    .actor("dev_fusion/Linkedin-Profile-Scraper")
+    .call({ urls: [linkedinUrl] });
 
   const { items } = await client.dataset(run.defaultDatasetId).listItems();
   if (!items.length) throw new Error("Aucun profil trouve");
 
-  const profile = items[0] as Record<string, unknown>;
+  const p = items[0] as Record<string, unknown>;
+
+  // Robust field mapping — different scrapers use different field names
+  const str = (
+    ...keys: string[]
+  ): string => {
+    for (const k of keys) {
+      const v = p[k];
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+    return "";
+  };
+
   return {
     name:
-      (profile.fullName as string) ||
-      `${profile.firstName || ""} ${profile.lastName || ""}`.trim() ||
+      str("fullName", "full_name", "name") ||
+      `${str("firstName", "first_name")} ${str("lastName", "last_name")}`.trim() ||
       "Inconnu",
-    title: (profile.title as string) || (profile.headline as string) || "",
-    company: (profile.company as string) || "",
-    location:
-      (profile.location as string) ||
-      ((profile.geo as Record<string, string>)?.full as string) ||
-      "",
-    about: (profile.summary as string) || (profile.about as string) || "",
-    experience: (
-      (profile.experience as Array<Record<string, string>>) || []
-    ).map((exp) => ({
-      title: exp.title || "",
-      company: exp.companyName || exp.company || "",
-      duration: exp.duration || exp.timePeriod || "",
-      description: exp.description || "",
-    })),
-    skills: (
-      (profile.skills as Array<string | Record<string, string>>) || []
-    ).map((s) => (typeof s === "string" ? s : s.name || "")),
+    title: str("headline", "title", "position"),
+    company: str("company", "companyName", "company_name", "currentCompany"),
+    location: str("location", "addressLocality", "geo"),
+    about: str("summary", "about", "description"),
+    experience: extractExperience(p),
+    skills: extractSkills(p),
     recentActivity: [] as Array<{
       type: "post" | "comment" | "share";
       text: string;
@@ -49,4 +48,37 @@ export async function scrapeLinkedInProfile(linkedinUrl: string) {
       engagement: number;
     }>,
   };
+}
+
+function extractExperience(
+  p: Record<string, unknown>
+): Array<{
+  title: string;
+  company: string;
+  duration: string;
+  description: string;
+}> {
+  const raw = (p.experience || p.experiences || p.positions || []) as Array<
+    Record<string, unknown>
+  >;
+  if (!Array.isArray(raw)) return [];
+
+  return raw.slice(0, 10).map((exp) => ({
+    title: String(exp.title || exp.position || ""),
+    company: String(exp.companyName || exp.company || exp.company_name || ""),
+    duration: String(exp.duration || exp.timePeriod || exp.dateRange || ""),
+    description: String(exp.description || ""),
+  }));
+}
+
+function extractSkills(p: Record<string, unknown>): string[] {
+  const raw = (p.skills || p.skill || []) as Array<
+    string | Record<string, unknown>
+  >;
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .slice(0, 20)
+    .map((s) => (typeof s === "string" ? s : String(s.name || s.skill || "")))
+    .filter(Boolean);
 }
