@@ -15,6 +15,12 @@ import type {
 
 const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 
+function stripMarkdownJson(text: string): string {
+  // Remove ```json ... ``` or ``` ... ``` wrappers
+  const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  return match ? match[1].trim() : text.trim();
+}
+
 function parseProfileFromText(text: string): LinkedInProfile {
   const lines = text.split("\n").filter((l) => l.trim());
   const name = lines[0]?.trim() || "Inconnu";
@@ -152,7 +158,7 @@ export async function POST(request: NextRequest) {
 
         let scoringJson;
         try {
-          scoringJson = JSON.parse(scoringText);
+          scoringJson = JSON.parse(stripMarkdownJson(scoringText));
         } catch {
           // Retry once
           const retryResponse = await anthropic.messages.create({
@@ -172,7 +178,7 @@ export async function POST(request: NextRequest) {
             retryResponse.content[0].type === "text"
               ? retryResponse.content[0].text
               : "";
-          scoringJson = JSON.parse(retryText);
+          scoringJson = JSON.parse(stripMarkdownJson(retryText));
         }
 
         // Step 4: Message generation
@@ -194,7 +200,7 @@ export async function POST(request: NextRequest) {
           messageResponse.content[0].type === "text"
             ? messageResponse.content[0].text
             : "";
-        const messageJson = JSON.parse(messageText);
+        const messageJson = JSON.parse(stripMarkdownJson(messageText));
 
         // Build result
         const result: QualificationResult = {
