@@ -1,45 +1,97 @@
-import { ApifyClient } from "apify-client";
+// Apify REST API client (no SDK - avoids bundling issues with Turbopack/Vercel)
+const APIFY_BASE = "https://api.apify.com/v2";
+const ACTOR_ID = "dev_fusion~Linkedin-Profile-Scraper";
 
-function getApifyClient() {
-  if (!process.env.APIFY_API_TOKEN) {
-    throw new Error("APIFY_API_TOKEN is not configured");
-  }
-  return new ApifyClient({ token: process.env.APIFY_API_TOKEN });
+function getToken(): string {
+  const token = process.env.APIFY_API_TOKEN;
+  if (!token) throw new Error("APIFY_API_TOKEN is not configured");
+  return token;
 }
 
 function normalizeLinkedInUrl(url: string): string {
-  // Ensure URL has www. prefix (required by most LinkedIn scrapers)
   let normalized = url.trim();
-  normalized = normalized.replace(/^https?:\/\/(www\.)?linkedin\.com/, "https://www.linkedin.com");
-  // Remove trailing slash
+  normalized = normalized.replace(
+    /^https?:\/\/(www\.)?linkedin\.com/,
+    "https://www.linkedin.com"
+  );
   normalized = normalized.replace(/\/+$/, "");
   return normalized;
 }
 
-export async function scrapeLinkedInProfile(linkedinUrl: string) {
-  const client = getApifyClient();
-  const normalizedUrl = normalizeLinkedInUrl(linkedinUrl);
+async function apifyFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getToken();
+  const url = `${APIFY_BASE}${path}`;
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...(options?.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Apify API error ${res.status}: ${body.slice(0, 200)}`);
+  }
+  return res.json() as Promise<T>;
+}
 
+interface ApifyRunResponse {
+  data: {
+    id: string;
+    status: string;
+    defaultDatasetId: string;
+  };
+}
+
+interface ApifyDatasetResponse {
+  data: {
+    items: Array<Record<string, unknown>>;
+  };
+}
+
+export async function scrapeLinkedInProfile(linkedinUrl: string) {
+  const normalizedUrl = normalizeLinkedInUrl(linkedinUrl);
   console.log("[APIFY] Scraping profile:", normalizedUrl);
 
-  const run = await client
-    .actor("dev_fusion/Linkedin-Profile-Scraper")
-    .call(
-      { profileUrls: [normalizedUrl] },
-      { timeout: 120 }  // 120 seconds max
+  // Start the actor run synchronously (waits for completion, up to 120s)
+  const runResponse = await apifyFetch<ApifyRunResponse>(
+    `/acts/${ACTOR_ID}/run-sync-get-dataset-items?timeout=120`,
+    {
+      method: "POST",
+      body: JSON.stringify({ profileUrls: [normalizedUrl] }),
+    }
+  );
+
+  // run-sync-get-dataset-items returns dataset items directly
+  // But the response shape depends on the endpoint variant
+  // Let's handle both cases
+  let items: Array<Record<string, unknown>>;
+
+  if (Array.isArray(runResponse)) {
+    // run-sync-get-dataset-items returns items array directly
+    items = runResponse as unknown as Array<Record<string, unknown>>;
+  } else if (runResponse?.data?.defaultDatasetId) {
+    // Fallback: got a run response, fetch dataset separately
+    const datasetId = runResponse.data.defaultDatasetId;
+    console.log("[APIFY] Run completed, dataset:", datasetId);
+
+    const datasetRes = await apifyFetch<ApifyDatasetResponse>(
+      `/datasets/${datasetId}/items?format=json`
     );
-
-  console.log("[APIFY] Run status:", run.status, "Dataset:", run.defaultDatasetId);
-
-  if (run.status !== "SUCCEEDED") {
-    throw new Error(`Apify run failed with status: ${run.status}`);
+    items = Array.isArray(datasetRes)
+      ? (datasetRes as unknown as Array<Record<string, unknown>>)
+      : (datasetRes?.data?.items || []);
+  } else {
+    throw new Error("Unexpected Apify response format");
   }
 
-  const { items } = await client.dataset(run.defaultDatasetId).listItems();
   console.log("[APIFY] Items returned:", items.length);
-  if (!items.length) throw new Error("Aucun profil trouve - le scraper n'a retourne aucune donnee");
+  if (!items.length) {
+    throw new Error("Aucun profil trouve - le scraper n'a retourne aucune donnee");
+  }
 
-  const p = items[0] as Record<string, unknown>;
+  const p = items[0];
 
   const str = (...keys: string[]): string => {
     for (const k of keys) {
@@ -91,7 +143,6 @@ function extractExperience(
 }
 
 function extractSkills(p: Record<string, unknown>): string[] {
-  // dev_fusion uses topSkillsByEndorsements (string) or skills (array)
   const topSkills = p.topSkillsByEndorsements;
   if (typeof topSkills === "string" && topSkills.trim()) {
     return topSkills.split(",").map((s) => s.trim()).filter(Boolean);
