@@ -94,10 +94,12 @@ export async function POST(request: NextRequest) {
           try {
             profile = await scrapeLinkedInProfile(linkedinUrl);
           } catch (scrapeErr: unknown) {
-            const errMsg = scrapeErr instanceof Error ? scrapeErr.message : "";
+            const errMsg = scrapeErr instanceof Error ? scrapeErr.message : String(scrapeErr);
+            const errStack = scrapeErr instanceof Error ? scrapeErr.stack : "";
+            console.error("[APIFY_SCRAPE_ERROR]", errMsg, errStack);
             const userMessage = errMsg.includes("APIFY_API_TOKEN")
               ? "Le scraping LinkedIn n'est pas encore configure. Utilise le mode PDF pour analyser un profil."
-              : "Impossible de scraper ce profil. Essaye le mode PDF.";
+              : `Impossible de scraper ce profil. Essaye le mode PDF. (${errMsg.slice(0, 120)})`;
             send({ type: "error", message: userMessage });
             controller.close();
             return;

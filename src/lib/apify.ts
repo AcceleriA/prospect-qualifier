@@ -7,15 +7,37 @@ function getApifyClient() {
   return new ApifyClient({ token: process.env.APIFY_API_TOKEN });
 }
 
+function normalizeLinkedInUrl(url: string): string {
+  // Ensure URL has www. prefix (required by most LinkedIn scrapers)
+  let normalized = url.trim();
+  normalized = normalized.replace(/^https?:\/\/(www\.)?linkedin\.com/, "https://www.linkedin.com");
+  // Remove trailing slash
+  normalized = normalized.replace(/\/+$/, "");
+  return normalized;
+}
+
 export async function scrapeLinkedInProfile(linkedinUrl: string) {
   const client = getApifyClient();
+  const normalizedUrl = normalizeLinkedInUrl(linkedinUrl);
+
+  console.log("[APIFY] Scraping profile:", normalizedUrl);
 
   const run = await client
     .actor("dev_fusion/Linkedin-Profile-Scraper")
-    .call({ profileUrls: [linkedinUrl] });
+    .call(
+      { profileUrls: [normalizedUrl] },
+      { timeout: 120 }  // 120 seconds max
+    );
+
+  console.log("[APIFY] Run status:", run.status, "Dataset:", run.defaultDatasetId);
+
+  if (run.status !== "SUCCEEDED") {
+    throw new Error(`Apify run failed with status: ${run.status}`);
+  }
 
   const { items } = await client.dataset(run.defaultDatasetId).listItems();
-  if (!items.length) throw new Error("Aucun profil trouve");
+  console.log("[APIFY] Items returned:", items.length);
+  if (!items.length) throw new Error("Aucun profil trouve - le scraper n'a retourne aucune donnee");
 
   const p = items[0] as Record<string, unknown>;
 
