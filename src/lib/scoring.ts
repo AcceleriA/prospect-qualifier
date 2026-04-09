@@ -12,9 +12,12 @@ SCORING ICP (/100) :
   - Secteur adjacent = 10 pts
   - Pas de match = 0 pts
 - Localisation (19 pts) : la zone geographique correspond-elle ?
-  - Match exact = 19 pts
-  - Meme pays mais autre region = 12 pts
-  - Pas de match = 0 pts
+  La localisation ICP peut etre precise (ex: "Paris / Île-de-France", "Marseille / Provence-Alpes-Côte d'Azur") ou large (ex: "France entière", "Europe (hors France)").
+  - Match exact de la region/metropole = 19 pts (ex: ICP="Lyon / Auvergne-Rhône-Alpes" et profil a Lyon)
+  - Si ICP="France entière" et profil en France = 19 pts
+  - Meme pays mais region differente de celle ciblee = 12 pts (ex: ICP="Paris / Île-de-France" mais profil a Bordeaux)
+  - Pays francophone proche (Suisse, Belgique, Luxembourg) quand ICP cible la France = 8 pts
+  - Pas de match geographique = 0 pts
 - Employee count (16 pts) : la taille d'entreprise correspond-elle ?
   - Dans la fourchette = 16 pts
   - Proche (+/- 1 tranche) = 8 pts

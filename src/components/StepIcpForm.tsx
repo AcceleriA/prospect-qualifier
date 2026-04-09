@@ -34,14 +34,41 @@ const INDUSTRY_OPTIONS = [
   "Autre",
 ];
 
-const LOCATION_OPTIONS = [
-  "France",
-  "Paris / Ile-de-France",
-  "Lyon / Rhone-Alpes",
-  "Europe",
-  "USA",
-  "Canada",
-  "International",
+const LOCATION_GROUPS = [
+  {
+    label: "France — Régions",
+    options: [
+      "France entière",
+      "Paris / Île-de-France",
+      "Lyon / Auvergne-Rhône-Alpes",
+      "Marseille / Provence-Alpes-Côte d'Azur",
+      "Toulouse / Occitanie",
+      "Bordeaux / Nouvelle-Aquitaine",
+      "Nantes / Pays de la Loire",
+      "Lille / Hauts-de-France",
+      "Strasbourg / Grand Est",
+      "Rennes / Bretagne",
+      "Montpellier / Occitanie",
+      "Nice / Provence-Alpes-Côte d'Azur",
+      "Normandie",
+      "Bourgogne-Franche-Comté",
+      "Centre-Val de Loire",
+      "Corse",
+      "DOM-TOM",
+    ],
+  },
+  {
+    label: "International",
+    options: [
+      "Europe (hors France)",
+      "Suisse",
+      "Belgique",
+      "Luxembourg",
+      "USA",
+      "Canada",
+      "Autre international",
+    ],
+  },
 ];
 
 const EMPLOYEE_OPTIONS = [
@@ -134,11 +161,15 @@ export default function StepIcpForm({ icp, onUpdate, onNext }: StepIcpFormProps)
             onChange={(e) => onUpdate({ ...icp, location: e.target.value })}
             className="w-full rounded-lg border border-white/15 bg-bg-surface px-4 py-3 text-text-primary focus:border-violet focus:ring-1 focus:ring-violet"
           >
-            <option value="">Selectionne une zone</option>
-            {LOCATION_OPTIONS.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
+            <option value="">Sélectionne une zone</option>
+            {LOCATION_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.options.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
